@@ -1,0 +1,228 @@
+<!doctype html>
+<html>
+<head>
+	<title>6/6 Clock</title>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+	<link rel="stylesheet" href="bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO">
+	<style>
+		body > .container {
+			margin-top: 60px;
+		}
+
+		table.table td {
+			width: 42.3%;
+			padding: 0 .75rem;
+		}
+
+		table.table td:last-child {
+			width: 15.4%;
+		}
+
+		#hour, #minute {
+			font-size: 6rem;
+		}
+
+		#second {
+			font-size: 2rem;
+		}
+
+		#date {
+			font-size: 2rem;
+			text-align: right;
+		}
+
+		.ref,
+		.ref a,
+		.ref a:link,
+		.ref a:hover,
+		.ref a:active,
+		.ref a:visited {
+			color: #6c757d;
+		}
+	</style>
+	<script language="javascript" type="text/javascript" src="suncalc/suncalc.js"></script>
+	<script language="javascript" type="text/javascript">
+		var timeCache = new Array();
+		function getSunData(time) {
+			if ('undefined' === typeof time) {
+				return;
+			}
+			var sunData = timeCache[time.getFullYear() + '-' + time.getMonth() + '-' + time.getDate()];
+			if ('undefined' === typeof sunData) {
+				var
+					lat = document.getElementById('latitude').value,
+					lon = document.getElementById('longitude').value,
+					midnight = new Date(time.getTime());
+				midnight.setHours(0);
+				midnight.setMinutes(0);
+				midnight.setSeconds(0);
+				midnight.setMilliseconds(0);
+				midnight.setTime(midnight.getTime() - (new Date()).getTimezoneOffset()*60000); // make sure to get the sunData for the current day
+				var
+					tmp = SunCalc.getTimes(midnight, lat, lon),
+					tmp2 = SunCalc.getTimes(new Date(midnight.getTime() - 86400000), lat, lon),
+					tmp3 = SunCalc.getTimes(new Date(midnight.getTime() + 86400000), lat, lon);
+				var
+					m = 43200000 * 43200000 / (tmp.sunset - tmp.sunrise),
+					m2 = 43200000 * 43200000 / (tmp2.sunset - tmp2.sunrise),
+					m3 = 43200000 * 43200000 / (tmp3.sunset - tmp3.sunrise);
+				sunData = {
+					'preFit': function(x) {
+						return (m2 + m - 86400000)*x*x*x + (-2 * m2 - m + 129600000)*x*x + m2*x; // a cubic fit function from (0,0) to (1,43200000) with f'(0)=m2 and f'(1)=m
+					},
+					'postFit': function(x) {
+						return (m + m3 - 86400000)*x*x*x + (-2 * m - m3 + 129600000)*x*x + m*x; // a cubic fit function from (0,0) to (1,43200000) with f'(0)=m and f'(1)=m3
+					},
+					'sunrise': tmp.sunrise,
+					'sunset': tmp.sunset
+				};
+				timeCache[time.getFullYear() + '-' + time.getMonth() + '-' + time.getDate()] = sunData;
+			}
+			return sunData;
+		}
+
+		function getSunTime(now) {
+			if ('undefined' === typeof now) {
+				var now = new Date();
+			}
+			var sunData = getSunData(now);
+
+			var result = new Date(now.getTime());
+			result.setHours(0);
+			result.setMinutes(0);
+			result.setSeconds(0);
+			result.setMilliseconds(0);
+
+			var zero, one, fit;
+			if (now > sunData.sunrise && now < sunData.sunset) {
+				// between 6 and 6
+				zero = sunData.sunrise;
+				one = sunData.sunset;
+				fit = function(x) { return 43200000 * x; };
+				result.setHours(6);
+			} else {
+				if (now < sunData.sunrise) {
+					zero = getSunData(new Date(now.getTime() - 86400000)).sunset;
+					one = sunData.sunrise;
+					fit = sunData.preFit;
+					result.setTime(result.getTime() - 86400000);
+				} else {
+					zero = sunData.sunset;
+					one = getSunData(new Date(now.getTime() + 86400000)).sunrise;
+					fit = sunData.postFit;
+				}
+				result.setHours(18);
+			}
+			var x = (now - zero)/(one - zero);
+			result.setTime(
+				result.getTime()
+				+ fit(x)
+			);
+			return result;
+		}
+
+		function getLocation() {
+			if (navigator.geolocation) {
+				navigator.geolocation.getCurrentPosition(updateLocation);
+			}
+		}
+
+		function updateClock(time) {
+			if ('undefined' === typeof time) {
+				time = getSunTime();
+			}
+
+			if (isNaN(time.getTime())) {
+				document.getElementsByClassName('table')[0].setAttribute('style', 'display: none;');
+				document.getElementsByClassName('alert-danger')[0].setAttribute('style', '');
+				return;
+			} else {
+				document.getElementsByClassName('table')[0].setAttribute('style', '');
+				document.getElementsByClassName('alert-danger')[0].setAttribute('style', 'display: none;');
+			}
+
+			document.getElementById('hour').innerText = (time.getHours() > 9 ? '' : '0') + time.getHours();
+			document.getElementById('minute').innerText = (time.getMinutes() > 9 ? '' : '0') + time.getMinutes();
+			document.getElementById('second').innerText = (time.getSeconds() > 9 ? '' : '0') + time.getSeconds();
+			document.getElementById('date').innerText = time.getFullYear() + '-' + 
+									(time.getMonth() > 8 ? '' : '0') + (time.getMonth()+1) + '-' + 
+									(time.getDate() > 9 ? '' : '0') + time.getDate();
+		}
+
+		function updateLocation(pos) {
+			var
+				lat = document.getElementById('latitude'),
+				lon = document.getElementById('longitude');
+			if ('undefined' !== typeof pos) {
+				lat.value = pos.coords.latitude;
+				lon.value = pos.coords.longitude;
+			}
+			history.pushState(null, '', window.location.href.split('?')[0] + '?lat=' + lat.value + '&lon=' + lon.value);
+			timeCache = new Array();
+		}
+	</script>
+</head>
+<body>
+<div class="container">
+	<div class="row">
+		<div class="col">
+			This clock will display the current time, according to <a href="https://xkcd.com/2050/" target="_blank">6/6 time</a><sup id="note-1" class="ref"><a href="#note-1">*</a></sup>. You can choose to give your current location, so it will be accurate for you.
+		</div><div class="col">
+			<label for="latitude">Latitude:</label>
+			<input type="number" class="form-control" id="latitude" value="51.477550" onchange="updateLocation();" />
+			<br/>
+			<label for="longitude">Longitude:</label>
+			<input type="number" class="form-control" id="longitude" value="0" onchange="updateLocation();" />
+			<br/>
+			<button type="button" class="btn btn-primary" onclick="getLocation();">Get Location</button>
+		</div><div class="col">
+			<br/>
+			<table class="table"><tbody>
+				<tr>
+					<td id="hour"></td>
+					<td id="minute"></td>
+					<td id="second"></td>
+				</tr>
+				<tr>
+					<td id="date" colspan="3"></td>
+				</tr>
+			</tbody></table>
+			<div class="alert alert-danger" style="display: none;" role="alert">
+				Something at the location you choose seems not to fit. There is either an error in the script or no time for the sunrise/-set today.
+			</div>
+		</div>
+	</div>
+	<div class="row" id="note-1">
+		<div class="col">
+			<br/>
+			* The interpolation from sunset to sunrise is cubic from the surrounding days, so one second has a constant length each day but not at night.
+		</div>
+	</div>
+</div>
+<script language="javascript" type="text/javascript">
+	window.location.search.substring(1).split('&').forEach(function(param) {
+		var ps = param.split('=');
+		switch (ps[0]) {
+		case 'lat':
+			document.getElementById('latitude').value = ps[1];
+			break;
+		case 'lon':
+			document.getElementById('longitude').value = ps[1];
+			break;
+		}
+	});
+	window.setInterval(updateClock, 51);
+</script>
+<!--
+      myGraph.drawEquation(function(x) {
+	var result = new Date('2018-09-27 00:00:00');
+	var a = result.getTime();
+	result.setTime(result.getTime() + 3600000 * x);
+	var b = getSunTime(result).getTime();
+	return (b - a) / 3600000;
+      }, 'red', 1);
+</script>
+-->
+</body>
+</html>
