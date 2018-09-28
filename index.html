@@ -63,16 +63,17 @@
 					tmp = SunCalc.getTimes(midnight, lat, lon),
 					tmp2 = SunCalc.getTimes(new Date(midnight.getTime() - 86400000), lat, lon),
 					tmp3 = SunCalc.getTimes(new Date(midnight.getTime() + 86400000), lat, lon);
-				var
-					m = 43200000 * 43200000 / (tmp.sunset - tmp.sunrise),
-					m2 = 43200000 * 43200000 / (tmp2.sunset - tmp2.sunrise),
-					m3 = 43200000 * 43200000 / (tmp3.sunset - tmp3.sunrise);
+
 				sunData = {
 					'preFit': function(x) {
-						return (m2 + m - 86400000)*x*x*x + (-2 * m2 - m + 129600000)*x*x + m2*x; // a cubic fit function from (0,0) to (1,43200000) with f'(0)=m2 and f'(1)=m
+						var	n = (tmp.sunrise - tmp2.sunset) * 43200000 / (tmp.sunset - tmp.sunrise),
+							n2 = (tmp.sunrise - tmp2.sunset) * 43200000 / (tmp2.sunset - tmp2.sunrise);
+						return ((n2 + n - 86400000)*x*x*x + (-2 * n2 - n + 129600000)*x*x + n2*x); // a cubic fit function from (0,0) to (1,43200000) with f'(0)=m2 and f'(1)=m
 					},
 					'postFit': function(x) {
-						return (m + m3 - 86400000)*x*x*x + (-2 * m - m3 + 129600000)*x*x + m*x; // a cubic fit function from (0,0) to (1,43200000) with f'(0)=m and f'(1)=m3
+						var	n = (tmp3.sunrise - tmp.sunset) * 43200000 / (tmp.sunset - tmp.sunrise),
+							n3 = (tmp3.sunrise - tmp.sunset) * 43200000 / (tmp3.sunset - tmp3.sunrise);
+						return ((n + n3 - 86400000)*x*x*x + (-2 * n - n3 + 129600000)*x*x + n*x); // a cubic fit function from (0,0) to (1,43200000) with f'(0)=m and f'(1)=m3
 					},
 					'sunrise': tmp.sunrise,
 					'sunset': tmp.sunset
